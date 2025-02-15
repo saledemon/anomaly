@@ -2,6 +2,8 @@ from PyQt5.QtCore import Qt, QMimeData
 from PyQt5.QtGui import QPixmap, QDrag
 from PyQt5.QtWidgets import QGraphicsPixmapItem
 
+# types of moveable pieces: player, reminders,
+
 class DraggablePiece(QGraphicsPixmapItem):
     def __init__(self, image_path, x, y):
         super().__init__()

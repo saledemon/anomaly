@@ -1,12 +1,9 @@
 import sys
 
-from PyQt5.QtCore import Qt, QMimeData, QRectF
-from PyQt5.QtGui import QPixmap, QDrag, QPen, QPainterPath, QPainterPathStroker, QColor, QTransform, QPainter, QBrush
-from PyQt5.QtWidgets import QGraphicsView, QGraphicsScene, QMainWindow, QApplication, \
-    QGraphicsPixmapItem, QPushButton, QVBoxLayout, QWidget
+from PyQt5.QtWidgets import QMainWindow, QApplication, QPushButton, QVBoxLayout, QWidget
 
 from board import Board, BoardScene
-from player import GameState, Player
+from player import GameState
 
 class GameWindow(QMainWindow):
     def __init__(self):
@@ -21,9 +18,13 @@ class GameWindow(QMainWindow):
         button: QPushButton = QPushButton("Move")
         button.clicked.connect(self.board_scene.initiateMove)
 
+        update: QPushButton = QPushButton("Update Burger Pos")
+        update.clicked.connect(self.board_scene.update_burger)
+
         widget = QWidget()
         layout = QVBoxLayout()
         layout.addWidget(button)
+        layout.addWidget(update)
         layout.addWidget(self.board)
         widget.setLayout(layout)
 

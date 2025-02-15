@@ -2,6 +2,7 @@ from PyQt5.QtCore import Qt, QRectF
 from PyQt5.QtGui import QPixmap, QPainter, QColor, QBrush, QTransform
 from PyQt5.QtWidgets import QGraphicsPixmapItem, QGraphicsView, QGraphicsScene
 
+import client
 from player import DraggablePiece
 from trying_stuff import board_repr
 
@@ -70,6 +71,7 @@ class BoardScene(QGraphicsScene):
             if board_zone.highlight:
                 self.moveTo(event.scenePos(), board_zone)
                 self.clear_highlights()
+                client.post_burger_pos(event.scenePos(), board_zone)
             else:
                 self.clear_highlights()
             self.is_moving = False
@@ -107,6 +109,11 @@ class BoardScene(QGraphicsScene):
     def cancelMove(self):
         self.clear_highlights()
 
+    def update_burger(self):
+        pos, zone = client.get_burger_pos()
+        if pos and zone:
+            self.moveTo(pos, zone)
+
 class BoardZone(QGraphicsPixmapItem):
     def __init__(self, x, y, pixmap, zone_id):
         super().__init__(pixmap)
@@ -114,11 +121,12 @@ class BoardZone(QGraphicsPixmapItem):
         self.setPos(x, y)
         self.setFlag(QGraphicsPixmapItem.ItemIsSelectable, True)
         self.setFlag(QGraphicsPixmapItem.ItemIsMovable, True)  # Allow manual dragging
-        self.setAcceptDrops(True)
+        self.setAcceptDrops(zone_id < 12)
         self.highlight = None
+        self.reminders = []
 
-        self.highlight_pixmap = self.create_highlight_overlay(QColor(255, 255, 0, 100))
-        self.double_highlight = self.create_highlight_overlay(QColor(9, 255, 200, 100))
+        self.valid_move_highlight = self.create_highlight_overlay(QColor(255, 255, 0, 100))
+        self.hover_highlight = self.create_highlight_overlay(QColor(9, 255, 200, 100))
 
     def s(self) ->  BoardScene:
         s = self.scene()
@@ -159,7 +167,7 @@ class BoardZone(QGraphicsPixmapItem):
         self.update()
 
     def dragEnterEvent(self, event):
-        self.highlight = self.highlight_pixmap
+        self.highlight = self.hover_highlight
         self.update()
 
     def dragLeaveEvent(self, event):
@@ -167,16 +175,23 @@ class BoardZone(QGraphicsPixmapItem):
         self.update()
 
     def highlightForHoverMouse(self):
-        self.highlight = self.double_highlight
+        self.highlight = self.hover_highlight
         self.update()
 
     def highlightForValidMove(self):
-        self.highlight = self.highlight_pixmap
+        self.highlight = self.valid_move_highlight
         self.update()
 
     def clearHighlights(self):
         self.highlight = None
         self.update()
+
+    def mousePressEvent(self, event):
+        if event.button() == Qt.RightButton:
+            r = QGraphicsPixmapItem(QPixmap("balloon.jpeg").scaled(50, 50, Qt.KeepAspectRatio))
+            r.setPos(event.scenePos())
+            self.reminders.append(r)
+            self.s().addItem(r)
 
 class Board(QGraphicsView):
     def __init__(self, game_state, scene):
@@ -219,6 +234,9 @@ class Board(QGraphicsView):
 
         self.scene.addItem(BoardZone(131.8823 * res, 131.8682 * res, QPixmap("res/reactor.png"), REACTOR))
 
-        self.scene.player = DraggablePiece("burger.jpeg", 50, 50)
+        self.scene.player = DraggablePiece("anomaly.png", 50, 50)
         self.scene.addItem(self.scene.player)
+
+        # self.scene.anomaly = DraggablePiece("anomaly.png", 100, 100)
+        # self.scene.addItem(self.scene.anomaly)
 
