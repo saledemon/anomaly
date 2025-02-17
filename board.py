@@ -1,10 +1,9 @@
-from PyQt5.QtCore import Qt, QRectF
-from PyQt5.QtGui import QPixmap, QPainter, QColor, QBrush, QTransform
-from PyQt5.QtWidgets import QGraphicsPixmapItem, QGraphicsView, QGraphicsScene
+from PyQt5.QtCore import Qt, QRectF, QPoint
+from PyQt5.QtGui import QPixmap, QPainter, QColor, QBrush, QTransform, QPen
+from PyQt5.QtWidgets import QGraphicsPixmapItem, QGraphicsView, QGraphicsScene, QGraphicsEllipseItem
 
-import client
 from player import DraggablePiece
-from trying_stuff import board_repr
+from trying_stuff import board_repr, hot_points, board_sym
 
 OUTER_RING = [0, 1, 2, 3]
 MIDDLE_RING = [4, 5, 6, 7]
@@ -18,7 +17,58 @@ class BoardScene(QGraphicsScene):
         self.dragged_item = None
         self.is_moving = False
         self.hover_board_zone = None
-        self.player = None
+        self.player = DraggablePiece("anomaly.png", 50, 50)
+
+        self.init_board()
+        self.tracking_symbols = QGraphicsPixmapItem(QPixmap("res/s_board.png"))
+        self.tracking_symbols.setPos(110, 110)
+        self.tracking_symbols.setOpacity(0.5)
+        self.addItem(self.tracking_symbols)
+
+        self.addRect(self.sceneRect(), QPen(Qt.red))
+
+        self.place_hot_points()
+
+    def place_hot_points(self):
+        for p in hot_points.values():
+            if p:
+                circle = QGraphicsEllipseItem(QRectF(p[0], p[1], 20, 20))
+                circle.setBrush(QColor(255, 0, 0))  # Set the fill color to red
+                circle.setPen(QColor(0, 0, 0))  # Set the outline color to black
+                self.addItem(circle)
+
+    def init_board(self):
+        shuttle = QPixmap("res/shuttle_bay.png")  # Load your image
+        outer = QPixmap("res/outer_ring.png")  # Load your image
+        inner = QPixmap("res/inner_ring.png")  # Load your image
+        middle = QPixmap("res/middle_ring.png")  # Load your image
+        rot90 = QTransform().rotate(90)
+        rot180 = QTransform().rotate(180)
+        rot270 = QTransform().rotate(270)
+
+        res = 2.78
+
+        self.addItem(BoardZone(0, 0, outer, OUTER_RING[0]))
+        self.addItem(BoardZone(55.2672 * res, 55.2552 * res, shuttle, SHUTTLE_BAY[0]))
+        self.addItem(BoardZone(107.9844 * res, 35.9809 * res, middle, MIDDLE_RING[0]))
+        self.addItem(BoardZone(90.0108 * res, 90.0328 * res, inner, INNER_RING[0]))
+
+        self.addItem(BoardZone(179.9877 * res, 0, outer.transformed(rot90), OUTER_RING[1]))
+        self.addItem(BoardZone(224.9998 * res, 55.2552 * res, shuttle.transformed(rot90), SHUTTLE_BAY[1]))
+        self.addItem(BoardZone(257.9467 * res, 107.9702 * res, middle.transformed(rot90), MIDDLE_RING[1]))
+        self.addItem(BoardZone(179.9776 * res, 90.0328 * res, inner.transformed(rot90), INNER_RING[1]))
+
+        self.addItem(BoardZone(179.9891 * res, 179.9595 * res, outer.transformed(rot180), OUTER_RING[2]))
+        self.addItem(BoardZone(224.9998 * res, 224.9859 * res, shuttle.transformed(rot180), SHUTTLE_BAY[2]))
+        self.addItem(BoardZone(107.9843 * res, 257.9323 * res, middle.transformed(rot180), MIDDLE_RING[2]))
+        self.addItem(BoardZone(179.9769 * res, 179.9274 * res, inner.transformed(rot180), INNER_RING[2]))
+
+        self.addItem(BoardZone(0, 179.9595 * res, outer.transformed(rot270), OUTER_RING[3]))
+        self.addItem(BoardZone(55.2693 * res, 224.9859 * res, shuttle.transformed(rot270), SHUTTLE_BAY[3]))
+        self.addItem(BoardZone(35.995 * res, 107.9703 * res, middle.transformed(rot270), MIDDLE_RING[3]))
+        self.addItem(BoardZone(90.0108 * res, 179.9274 * res, inner.transformed(rot270), INNER_RING[3]))
+
+        self.addItem(BoardZone(131.8823 * res, 131.8682 * res, QPixmap("res/reactor.png"), REACTOR))
 
     def highlight_valid_moves(self):
         # highlight for burger player
@@ -69,9 +119,7 @@ class BoardScene(QGraphicsScene):
         board_zone = self.get_board_zone_at(event.scenePos())
         if board_zone:
             if board_zone.highlight:
-                self.moveTo(event.scenePos(), board_zone)
-                self.clear_highlights()
-                client.post_burger_pos(event.scenePos(), board_zone)
+                self.ctrl.selection_made.emit(board_zone)
             else:
                 self.clear_highlights()
             self.is_moving = False
@@ -104,15 +152,21 @@ class BoardScene(QGraphicsScene):
         x, y = (pos.x() - self.player.boundingRect().width() / 2,
                 pos.y() - self.player.boundingRect().height() / 2)
         self.player.setPos(x, y)
-        self.player.move(board_zone.zone_id)
+        self.player.move(board_zone)
 
     def cancelMove(self):
         self.clear_highlights()
 
     def update_burger(self):
-        pos, zone = client.get_burger_pos()
-        if pos and zone:
-            self.moveTo(pos, zone)
+        pass
+
+    def highlight_all(self):
+        for i in self.items():
+            if isinstance(i, BoardZone) and i.zone_id < 12:
+                i.highlightForValidMove()
+
+    def setController(self, controller):
+        self.ctrl = controller
 
 class BoardZone(QGraphicsPixmapItem):
     def __init__(self, x, y, pixmap, zone_id):
@@ -124,6 +178,12 @@ class BoardZone(QGraphicsPixmapItem):
         self.setAcceptDrops(zone_id < 12)
         self.highlight = None
         self.reminders = []
+        hp = hot_points[zone_id]
+        if hp:
+            self.hot_point = QPoint(hp[0], hp[1])
+
+        if zone_id < 12:
+            self.tracking_symbols = board_sym[zone_id]
 
         self.valid_move_highlight = self.create_highlight_overlay(QColor(255, 255, 0, 100))
         self.hover_highlight = self.create_highlight_overlay(QColor(9, 255, 200, 100))
@@ -161,9 +221,8 @@ class BoardZone(QGraphicsPixmapItem):
 
     def dropEvent(self, event):
         if self.s().isDragging() and type(self.s().dragged_item) == DraggablePiece:
-            self.s().moveDraggedItemTo(self.mapToScene(event.pos()), self)
+            self.s().ctrl.selection_made.emit(self)
             event.acceptProposedAction()
-        self.highlight = None
         self.update()
 
     def dragEnterEvent(self, event):
@@ -194,49 +253,18 @@ class BoardZone(QGraphicsPixmapItem):
             self.s().addItem(r)
 
 class Board(QGraphicsView):
-    def __init__(self, game_state, scene):
+    def __init__(self, scene):
         super().__init__()
-
-        self.game_state = game_state
         self.scene = scene
         self.setScene(self.scene)
         self.setMouseTracking(True)
+        self.fitInView(self.scene.sceneRect(), Qt.KeepAspectRatio)
+        self.scale(1.55, 1.55)
 
-        shuttle = QPixmap("res/shuttle_bay.png")  # Load your image
-        outer = QPixmap("res/outer_ring.png")  # Load your image
-        inner = QPixmap("res/inner_ring.png")  # Load your image
-        middle = QPixmap("res/middle_ring.png")  # Load your image
-        rot90 = QTransform().rotate(90)  # Rotate 45 degrees
-        rot180 = QTransform().rotate(180)
-        rot270 = QTransform().rotate(270)
-
-        res = 2.77777777777777777
-
-        self.scene.addItem(BoardZone(0, 0, outer, OUTER_RING[0]))
-        self.scene.addItem(BoardZone(55.2672*res, 55.2552*res, shuttle, SHUTTLE_BAY[0]))
-        self.scene.addItem(BoardZone(107.9844*res, 35.9809*res, middle, MIDDLE_RING[0]))
-        self.scene.addItem(BoardZone(90.0108*res, 90.0328*res, inner, INNER_RING[0]))
-
-        self.scene.addItem(BoardZone(179.9877 * res, 0, outer.transformed(rot90), OUTER_RING[1]))
-        self.scene.addItem(BoardZone(224.9998 * res, 55.2552 * res, shuttle.transformed(rot90), SHUTTLE_BAY[1]))
-        self.scene.addItem(BoardZone(257.9467 * res, 107.9702 * res, middle.transformed(rot90), MIDDLE_RING[1]))
-        self.scene.addItem(BoardZone(179.9776 * res, 90.0328 * res, inner.transformed(rot90), INNER_RING[1]))
-
-        self.scene.addItem(BoardZone(179.9891 * res, 179.9595 * res, outer.transformed(rot180), OUTER_RING[2]))
-        self.scene.addItem(BoardZone(224.9998 * res, 224.9859 * res, shuttle.transformed(rot180), SHUTTLE_BAY[2]))
-        self.scene.addItem(BoardZone(107.9843 * res, 257.9323 * res, middle.transformed(rot180), MIDDLE_RING[2]))
-        self.scene.addItem(BoardZone(179.9769 * res, 179.9274 * res, inner.transformed(rot180), INNER_RING[2]))
-
-        self.scene.addItem(BoardZone(0, 179.9595 * res, outer.transformed(rot270), OUTER_RING[3]))
-        self.scene.addItem(BoardZone(55.2693 * res, 224.9859 * res, shuttle.transformed(rot270), SHUTTLE_BAY[3]))
-        self.scene.addItem(BoardZone(35.995  * res, 107.9703 * res, middle.transformed(rot270), MIDDLE_RING[3]))
-        self.scene.addItem(BoardZone(90.0108 * res, 179.9274 * res, inner.transformed(rot270), INNER_RING[3]))
-
-        self.scene.addItem(BoardZone(131.8823 * res, 131.8682 * res, QPixmap("res/reactor.png"), REACTOR))
-
-        self.scene.player = DraggablePiece("anomaly.png", 50, 50)
-        self.scene.addItem(self.scene.player)
-
-        # self.scene.anomaly = DraggablePiece("anomaly.png", 100, 100)
-        # self.scene.addItem(self.scene.anomaly)
+    def paintEvent(self, event):
+        """Paint viewport border"""
+        super().paintEvent(event)
+        painter = QPainter(self.viewport())
+        painter.setPen(QPen(Qt.green, 3))  # Green border, 3px thick
+        painter.drawRect(self.viewport().rect().adjusted(1, 1, -2, -2))
 

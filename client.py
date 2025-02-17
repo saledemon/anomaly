@@ -1,10 +1,11 @@
 import requests
 
 # URL du serveur Flask
-server_url = "https://zacroc1.dreamhosters.com/content/server"
+server_url = ""
 
 def get_test():
     response = requests.get(f"{server_url}")
+    print(response.content)
     data = response.json()
     print(data["message"])
 

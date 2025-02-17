@@ -32,8 +32,9 @@ class DraggablePiece(QGraphicsPixmapItem):
 
             drag.exec_(Qt.MoveAction)
 
-    def move(self, zone_id):
-        self.position = zone_id
+    def move(self, zone):
+        self.setPos(zone.hot_point)
+        self.position = zone.zone_id
 
 
 class Player:
@@ -54,38 +55,3 @@ class Player:
 
     def place_reminder(self):
         pass # place a reminder on the map for a specific player
-
-
-class AnomalyPlayer(Player):
-    def __init__(self):
-        super().__init__()
-        self.power_ups = []
-        self.action_tokens = 3
-        self.actions = ["move", "feed", "free special action"]
-
-    def feed(self):
-        pass
-
-
-class StudentPlayer(Player):
-    def __init__(self):
-        super().__init__()
-        self.actions = ["move", "track", "special action"]
-        self.tracking_info = []
-
-    def track(self):
-        pass
-
-class GameState:
-    def __init__(self):
-        self.health_students = 0
-        self.health_anomaly = 0
-        self.health_zero_marker = 0
-
-
-        self.fuel_tanks = []
-        self.radiation = []
-        self.action_cards_deck = []
-
-    def reveal_player_pos(self):
-        pass
