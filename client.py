@@ -1,45 +1,46 @@
-import requests
+import asyncio
+import websockets
+import json
 
-# URL du serveur Flask
-server_url = ""
+from PyQt5.QtCore import QThread, pyqtSignal
 
-def get_test():
-    response = requests.get(f"{server_url}")
-    print(response.content)
-    data = response.json()
-    print(data["message"])
 
-def get_burger_pos():
-    response = requests.get(f"{server_url}/burger_pos.php")
-    data = response.json()
-    print(data)
-    if "pos" in data.keys():
-        return data["pos"], data["zone"]
-    else:
-        return None, None
+class WebSocketThread(QThread):
+    message_received: pyqtSignal = pyqtSignal(bytes)  # Signal to send messages to PyQt UI
 
-def post_burger_pos(pos, zone):
-    """
-    Send the position in the Scene to update the burger's position on the server
-    :param zone: int The Board Zone associated with the position
-    :param pos: Scene Pos
-    :return:
-    """
-    response = requests.post(f"{server_url}/move_burger.php", json={"pos":(pos.x(), pos.y()), "zone":zone.zone_id})
-    print(response)
-    return response
+    def __init__(self):
+        super().__init__()
+        self.loop = asyncio.new_event_loop()  # Separate event loop for async tasks
+        self.running = True
 
-def get_game_state():
-    # Récupérer les données du jeu
-    response = requests.get(f"{server_url}/get_game_data")
-    print(response)
-    game_data = response.json()
-    return game_data
+    async def websocket_client(self):
+        uri = "ws://192.168.1.236:8080"
 
-def update_game_state():
-    # Envoyer une mise à jour
-    new_data = {"player1": {"score": 10}, "turn": "player2"}
-    response = requests.post(f"{server_url}/update_game_data", json=new_data)
-    return response
+        async with websockets.connect(uri) as websocket:
+            await websocket.send("anomalie")
+            response = await websocket.recv()
+            print("Server response:", response, flush=True)
+            test_message = {
+                "type": "test",
+                "content": "This is a JSON test message",
+                "sender": "Python Client"
+            }
+            await websocket.send(json.dumps(test_message))
 
-#print(update_game_state())
+            while True:
+                message = await websocket.recv()
+                self.message_received.emit(message)
+
+    def run(self):
+        asyncio.set_event_loop(self.loop)
+        self.loop.run_until_complete(self.websocket_client())
+
+    def stop(self):
+        self.running = False
+        self.quit()
+
+# Function that processes messages received from WebSockets
+# def handle_message(data):
+#     if isinstance(data, bytes):
+#         data = data.decode("utf-8")
+#     return(json.loads(data))
